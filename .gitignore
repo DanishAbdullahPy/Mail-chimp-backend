@@ -1,0 +1,11 @@
+# Environment variables
+.env
+
+# Node.js dependencies
+node_modules/
+
+# Prisma migrations (optional, if you want to regenerate them on deploy)
+prisma/migrations/
+
+# Logs and temporary files
+*.log

@@ -1,0 +1,120 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           Int          @id @default(autoincrement())
+  username     String       @unique @db.VarChar(255)
+  email        String       @unique @db.VarChar(255)
+  phoneNumber  String       @unique @db.VarChar(20)
+  password     String       @db.VarChar(255)
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @default(now()) @updatedAt
+  automations  Automation[]
+  campaigns    Campaign[]
+  subscribers  Subscriber[]
+
+  @@index([email])
+  @@index([phoneNumber])
+  @@index([username])
+}
+
+model Automation {
+  id            Int      @id @default(autoincrement())
+  name          String
+  trigger_event String
+  workflow      Json?
+  status        String   @default("active")
+  user_id       Int
+  created_at    DateTime @default(now())
+  updated_at    DateTime @default(now())
+  user          User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([user_id])
+  @@index([status])
+}
+
+model Template {
+  id            Int        @id @default(autoincrement())
+  name          String
+  html_content  String
+  thumbnail_url String?
+  created_at    DateTime   @default(now())
+  updated_at    DateTime   @default(now()) @updatedAt
+  campaigns     Campaign[]
+
+  @@index([name])
+}
+
+model Campaign {
+  id            Int                 @id @default(autoincrement())
+  name          String
+  subject       String?
+  body          String
+  template_id   Int?
+  status        String              @default("draft")
+  scheduled_at  DateTime?
+  sent_at       DateTime?
+  user_id       Int
+  created_at    DateTime            @default(now())
+  updated_at    DateTime            @default(now())
+  user          User                @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  template      Template?           @relation(fields: [template_id], references: [id], onDelete: SetNull)
+  subscribers   CampaignSubscriber[]
+  emailEvents   EmailEvent[]
+
+  @@index([user_id])
+  @@index([status])
+  @@index([scheduled_at])
+}
+
+model Subscriber {
+  id            Int                 @id @default(autoincrement())
+  email         String              @unique
+  name          String?
+  phone         String?
+  status        String              @default("subscribed")
+  created_at    DateTime            @default(now())
+  updated_at    DateTime            @default(now()) @updatedAt
+  user_id       Int?
+  metadata      Json?
+  user          User?               @relation(fields: [user_id], references: [id], onDelete: SetNull)
+  campaigns     CampaignSubscriber[]
+  emailEvents   EmailEvent[]
+
+  @@index([email])
+  @@index([status])
+  @@index([user_id])
+}
+
+model CampaignSubscriber {
+  campaign_id    Int
+  subscriber_id  Int
+  sent_at        DateTime?
+  campaign       Campaign    @relation(fields: [campaign_id], references: [id])
+  subscriber     Subscriber  @relation(fields: [subscriber_id], references: [id])
+
+  @@id([campaign_id, subscriber_id])
+  @@index([sent_at])
+}
+
+model EmailEvent {
+  id            Int       @id @default(autoincrement())
+  campaign_id   Int
+  subscriber_id Int
+  event_type    String
+  event_data    Json?
+  created_at    DateTime  @default(now())
+  campaign      Campaign  @relation(fields: [campaign_id], references: [id], onDelete: Cascade)
+  subscriber    Subscriber @relation(fields: [subscriber_id], references: [id], onDelete: Cascade)
+
+  @@index([campaign_id])
+  @@index([subscriber_id])
+  @@index([event_type])
+  @@index([created_at])
+}
