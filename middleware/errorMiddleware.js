@@ -1,9 +1,8 @@
-const express = require('express');
-const router = express.Router();
+const errorMiddleware = (err, req, res, next) => {
+  console.error(err.stack); // Log for debugging
+  const statusCode = err.statusCode || 500;
+  const message = err.message || 'Something went wrong';
+  res.status(statusCode).json({ message });
+};
 
-// Add your campaign routes here
-router.get('/example', (req, res) => {
-  res.json({ message: 'Campaign route example' });
-});
-
-module.exports = router;
+module.exports = errorMiddleware;
