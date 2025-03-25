@@ -21,6 +21,7 @@ model User {
   subscribers   Subscriber[]
   ownedTeams    Team[]               @relation("TeamOwner")
   teamMembers   UserTeam[]
+  audits        CampaignAudit[]      // Relation for audit logs
 
   @@index([email])
   @@index([phoneNumber])
@@ -92,15 +93,31 @@ model Campaign {
   sent_at      DateTime?
   user_id      Int
   created_at   DateTime             @default(now())
-  updated_at   DateTime             @default(now())
-  template     Template?            @relation(fields: [template_id], references: [id])
+  updated_at   DateTime             @default(now()) @updatedAt
+  deletedAt    DateTime?            // Added for soft deletion
+  template     Template?            @relation(fields: [template_id], references: [id], onDelete: SetNull)
   user         User                 @relation(fields: [user_id], references: [id], onDelete: Cascade)
   subscribers  CampaignSubscriber[]
   emailEvents  EmailEvent[]
+  audits       CampaignAudit[]      // Relation to CampaignAudit
 
   @@index([user_id])
   @@index([status])
   @@index([scheduled_at])
+}
+
+model CampaignAudit {
+  id          Int      @id @default(autoincrement())
+  campaignId  Int
+  campaign    Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  action      String
+  userId      Int
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  details     Json?
+  createdAt   DateTime @default(now())
+
+  @@index([campaignId])
+  @@index([userId])
 }
 
 model Subscriber {
