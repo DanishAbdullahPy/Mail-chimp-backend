@@ -1,6 +1,7 @@
 {
   "dependencies": {
-    "@prisma/client": "^6.4.1",
+    "@prisma/client": "^6.5.0",
+    "amqplib": "^0.10.5",
     "bcryptjs": "^3.0.2",
     "bull": "^4.16.5",
     "cookie-parser": "^1.4.7",
@@ -16,7 +17,8 @@
     "nodemailer": "^6.10.0",
     "passport": "^0.7.0",
     "passport-google-oauth20": "^2.0.0",
-    "redis": "^4.7.0"
+    "redis": "^4.7.0",
+    "winston": "^3.17.0"
   },
   "devDependencies": {
     "prisma": "^6.4.1"

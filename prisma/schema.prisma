@@ -94,13 +94,12 @@ model Campaign {
   user_id      Int
   created_at   DateTime             @default(now())
   updated_at   DateTime             @default(now()) @updatedAt
-  deletedAt    DateTime?            // Added for soft deletion
+  deletedAt    DateTime?
   template     Template?            @relation(fields: [template_id], references: [id], onDelete: SetNull)
   user         User                 @relation(fields: [user_id], references: [id], onDelete: Cascade)
   subscribers  CampaignSubscriber[]
   emailEvents  EmailEvent[]
-  audits       CampaignAudit[]      // Relation to CampaignAudit
-
+  audits       CampaignAudit[]
   @@index([user_id])
   @@index([status])
   @@index([scheduled_at])

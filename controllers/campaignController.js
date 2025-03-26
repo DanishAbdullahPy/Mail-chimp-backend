@@ -4,6 +4,18 @@ const winston = require('winston');
 const amqp = require('amqplib');
 const prisma = new PrismaClient();
 
+// Test Prisma connection
+(async () => {
+  try {
+    await prisma.$connect();
+    console.log('Prisma connected successfully');
+    const campaigns = await prisma.campaign.findMany();
+    console.log('Campaigns:', campaigns);
+  } catch (error) {
+    console.error('Prisma connection failed:', error);
+  }
+})();
+
 // Structured logging with winston
 const logger = winston.createLogger({
   level: 'info',
@@ -19,8 +31,8 @@ const logger = winston.createLogger({
 
 // Validation middleware for createCampaign
 const validateCreateCampaign = [
-  body('name').trim().notEmpty().withMessage('Name is required'),
-  body('body').trim().notEmpty().withMessage('Body is required'),
+  body('name').notEmpty().withMessage('Campaign name is required'),
+  body('body').notEmpty().withMessage('Campaign body is required'),
   body('subject').optional().trim(),
   body('template_id').optional().isInt().withMessage('Template ID must be an integer'),
   body('scheduled_at').optional().isISO8601().toDate().withMessage('Scheduled date must be a valid ISO 8601 date'),
@@ -71,7 +83,6 @@ const logCampaignAction = async (campaignId, userId, action, details) => {
   });
 };
 
-// Create a new campaign
 exports.createCampaign = [
   validateCreateCampaign,
   async (req, res) => {
@@ -82,10 +93,14 @@ exports.createCampaign = [
         return res.status(400).json({ errors: errors.array() });
       }
 
+      if (!req.user || !req.user.id) {
+        logger.error('User not authenticated', { ip: req.ip });
+        return res.status(401).json({ error: 'User not authenticated' });
+      }
+
       const { name, body, subject, template_id, scheduled_at } = req.body;
       const userId = req.user.id;
 
-      // Validate template_id if provided
       if (template_id) {
         const template = await prisma.template.findUnique({ where: { id: parseInt(template_id) } });
         if (!template) {
@@ -93,6 +108,8 @@ exports.createCampaign = [
           return res.status(404).json({ error: 'Template not found' });
         }
       }
+
+      logger.info('Attempting to create campaign', { userId, ip: req.ip });
 
       const campaign = await prisma.campaign.create({
         data: {
@@ -113,11 +130,34 @@ exports.createCampaign = [
       logger.info('Campaign created successfully', { campaignId: campaign.id, userId, ip: req.ip });
       res.status(201).json(campaign);
     } catch (error) {
-      logger.error('Failed to create campaign', { error: error.message, userId: req.user.id, ip: req.ip });
+      logger.error('Failed to create campaign', { error: error.message, userId: req.user?.id, ip: req.ip });
       res.status(400).json({ error: 'Failed to create campaign', details: error.message });
     }
   },
 ];
+
+// Test route for creating a campaign (added to fix the undefined issue)
+exports.testCreateCampaign = async (req, res) => {
+  try {
+    const campaign = await prisma.campaign.create({
+      data: {
+        name: 'Test Campaign Direct',
+        body: '<h1>Test</h1>',
+        subject: 'Test Subject',
+        status: 'draft',
+        user_id: 7, // Hardcode user_id for now since this route bypasses auth
+        created_at: new Date(),
+        updated_at: new Date(),
+      },
+    });
+
+    logger.info('Test campaign created successfully', { campaignId: campaign.id, ip: req.ip });
+    res.status(201).json(campaign);
+  } catch (error) {
+    logger.error('Failed to create test campaign', { error: error.message, ip: req.ip });
+    res.status(400).json({ error: 'Failed to create test campaign', details: error.message });
+  }
+};
 
 // Retrieve campaigns with pagination, filtering, and searching
 exports.getCampaigns = [
@@ -137,7 +177,6 @@ exports.getCampaigns = [
       const status = req.query.status;
       const search = req.query.search;
 
-      // Build the where clause for filtering
       const where = { user_id: userId, deletedAt: null };
       if (status) where.status = status;
       if (search) {
@@ -147,13 +186,12 @@ exports.getCampaigns = [
         ];
       }
 
-      // Fetch campaigns with pagination
       const campaigns = await prisma.campaign.findMany({
         where,
         skip,
         take: limit,
         orderBy: { created_at: 'desc' },
-        include: { template: true }, // Include related template data
+        include: { template: true },
       });
 
       const total = await prisma.campaign.count({ where });
@@ -170,7 +208,7 @@ exports.getCampaigns = [
         },
       });
     } catch (error) {
-      logger.error('Failed to fetch campaigns', { error: error.message, userId: req.user.id, ip: req.ip });
+      logger.error('Failed to fetch campaigns', { error: error.message, userId: req.user?.id, ip: req.ip });
       res.status(400).json({ error: 'Failed to fetch campaigns', details: error.message });
     }
   },
@@ -191,7 +229,6 @@ exports.updateCampaign = [
       const { name, body, subject, template_id, scheduled_at, status } = req.body;
       const userId = req.user.id;
 
-      // Check if the campaign exists and belongs to the user
       const campaignExists = await prisma.campaign.findFirst({
         where: { id: parseInt(id), user_id: userId, deletedAt: null },
       });
@@ -201,7 +238,6 @@ exports.updateCampaign = [
         return res.status(404).json({ error: 'Campaign not found or you do not have permission to update it' });
       }
 
-      // Validate status transition
       if (status && status !== campaignExists.status) {
         if (!validTransitions[campaignExists.status].includes(status)) {
           logger.warn('Invalid status transition', { campaignId: id, from: campaignExists.status, to: status, userId, ip: req.ip });
@@ -209,7 +245,6 @@ exports.updateCampaign = [
         }
       }
 
-      // Validate template_id if provided
       if (template_id) {
         const template = await prisma.template.findUnique({ where: { id: parseInt(template_id) } });
         if (!template) {
@@ -218,7 +253,6 @@ exports.updateCampaign = [
         }
       }
 
-      // Update the campaign
       const campaign = await prisma.campaign.update({
         where: { id: parseInt(id) },
         data: {
@@ -237,7 +271,7 @@ exports.updateCampaign = [
       logger.info('Campaign updated successfully', { campaignId: campaign.id, userId, ip: req.ip });
       res.status(200).json(campaign);
     } catch (error) {
-      logger.error('Failed to update campaign', { error: error.message, campaignId: req.params.id, userId: req.user.id, ip: req.ip });
+      logger.error('Failed to update campaign', { error: error.message, campaignId: req.params.id, userId: req.user?.id, ip: req.ip });
       res.status(400).json({ error: 'Failed to update campaign', details: error.message });
     }
   },
@@ -257,7 +291,6 @@ exports.markCampaignAsSent = [
       const { id } = req.params;
       const userId = req.user.id;
 
-      // Fetch the campaign with its subscribers
       const campaign = await prisma.campaign.findFirst({
         where: { id: parseInt(id), user_id: userId, deletedAt: null },
         include: { subscribers: { include: { subscriber: true } } },
@@ -268,13 +301,11 @@ exports.markCampaignAsSent = [
         return res.status(404).json({ error: 'Campaign not found or you do not have permission to update it' });
       }
 
-      // Validate status transition
       if (!['scheduled'].includes(campaign.status)) {
         logger.warn('Invalid status for sending', { campaignId: id, status: campaign.status, userId, ip: req.ip });
         return res.status(400).json({ error: `Cannot mark campaign as sent from status ${campaign.status}` });
       }
 
-      // Connect to RabbitMQ and queue email-sending tasks
       const QUEUE_NAME = 'emailQueue';
       const connection = await amqp.connect(process.env.RABBITMQ_URL || 'amqp://localhost');
       const channel = await connection.createChannel();
@@ -295,7 +326,6 @@ exports.markCampaignAsSent = [
 
       await connection.close();
 
-      // Update the campaign status
       const updatedCampaign = await prisma.campaign.update({
         where: { id: parseInt(id) },
         data: {
@@ -310,7 +340,7 @@ exports.markCampaignAsSent = [
       logger.info('Campaign marked as sent and emails queued', { campaignId: campaign.id, userId, ip: req.ip });
       res.status(200).json(updatedCampaign);
     } catch (error) {
-      logger.error('Failed to mark campaign as sent', { error: error.message, campaignId: req.params.id, userId: req.user.id, ip: req.ip });
+      logger.error('Failed to mark campaign as sent', { error: error.message, campaignId: req.params.id, userId: req.user?.id, ip: req.ip });
       res.status(400).json({ error: 'Failed to mark campaign as sent', details: error.message });
     }
   },
@@ -349,7 +379,7 @@ exports.deleteCampaign = [
       logger.info('Campaign soft deleted successfully', { campaignId: id, userId, ip: req.ip });
       res.status(204).send();
     } catch (error) {
-      logger.error('Failed to delete campaign', { error: error.message, campaignId: req.params.id, userId: req.user.id, ip: req.ip });
+      logger.error('Failed to delete campaign', { error: error.message, campaignId: req.params.id, userId: req.user?.id, ip: req.ip });
       res.status(400).json({ error: 'Failed to delete campaign', details: error.message });
     }
   },
