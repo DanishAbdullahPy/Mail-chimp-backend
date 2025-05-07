@@ -12,7 +12,7 @@ const errorMiddleware = require('./middleware/errorMiddleware');
 const passportConfig = require('./config/passport');
 const teamRoutes = require('./routes/teamRoutes');
 
-dotenv.config();
+dotenv.config();  
 
 const app = express();
 

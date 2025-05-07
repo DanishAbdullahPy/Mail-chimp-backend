@@ -5,7 +5,7 @@ const amqp = require('amqplib');
 const prisma = new PrismaClient();
 
 // Test Prisma connection
-(async () => {
+/*(async () => {
   try {
     await prisma.$connect();
     console.log('Prisma connected successfully');
@@ -14,7 +14,7 @@ const prisma = new PrismaClient();
   } catch (error) {
     console.error('Prisma connection failed:', error);
   }
-})();
+})();*/
 
 // Structured logging with winston
 const logger = winston.createLogger({

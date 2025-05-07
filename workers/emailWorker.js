@@ -1,13 +1,10 @@
-// Import required dependencies
 const amqp = require('amqplib');
 const nodemailer = require('nodemailer');
 const { PrismaClient } = require('@prisma/client');
 const winston = require('winston');
 
-// Initialize Prisma client for database operations
 const prisma = new PrismaClient();
 
-// Set up Winston logger for structured logging
 const logger = winston.createLogger({
   level: 'info',
   format: winston.format.combine(
@@ -20,7 +17,6 @@ const logger = winston.createLogger({
   ],
 });
 
-// Configure Nodemailer to use Postfix (self-hosted SMTP server)
 const transporter = nodemailer.createTransport({
   host: 'localhost',
   port: 25,
@@ -30,24 +26,20 @@ const transporter = nodemailer.createTransport({
   },
 });
 
-// Queue names and retry settings
 const QUEUE_NAME = 'emailQueue';
 const DLQ_NAME = 'emailQueue.dlq';
 const MAX_RETRIES = 3;
-const RETRY_DELAY = 1000; // 1 second base delay for exponential backoff
+const RETRY_DELAY = 1000; 
 
 // Main function to start the email worker
 async function startWorker() {
   try {
-    // Connect to RabbitMQ
     const connection = await amqp.connect(process.env.RABBITMQ_URL || 'amqp://localhost');
     const channel = await connection.createChannel();
 
     // Assert the main queue and Dead Letter Queue
     await channel.assertQueue(QUEUE_NAME, { durable: true });
     await channel.assertQueue(DLQ_NAME, { durable: true });
-
-    // Process one message at a time to avoid overloading Postfix
     channel.prefetch(1);
 
     logger.info('Email worker started, waiting for messages...');
@@ -70,7 +62,7 @@ async function startWorker() {
         try {
           // Send the email via Postfix
           await transporter.sendMail({
-            from: 'no-reply@yourdomain.com', // Replace with your sender email
+            from: 'no-reply@yourdomain.com', 
             to,
             subject,
             html: body,
